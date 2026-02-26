@@ -1,10 +1,15 @@
 "use client";
+
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Crosshair, AlertCircle } from "lucide-react";
 import LiveClock from "@/components/LiveClock";
-import LocationMap from "@/components/LocationMap";
 import LocationInfo from "@/components/LocationInfo";
+
+const LocationMap = dynamic(() => import("@/components/LocationMap"), {
+  ssr: false,
+});
 
 type Coordinates = {
   lat: number;
