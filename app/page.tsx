@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Crosshair, AlertCircle } from "lucide-react";
@@ -49,7 +49,7 @@ export default function Home() {
     setLoading(false);
   };
 
-  const requestGeolocation = () => {
+  const requestGeolocation = useCallback(() => {
     setLoading(true);
     setPermissionDenied(false);
 
@@ -92,15 +92,13 @@ export default function Home() {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
-  };
+  }, []);
 
   useEffect(() => {
-    const init = async () => {
+    queueMicrotask(() => {
       requestGeolocation();
-    };
-
-    init();
-  }, []);
+    });
+  }, [requestGeolocation]);
 
   return (
     <div className="min-h-screen bg-[#0A0F1C] text-white selection:bg-blue-500/30">
@@ -132,7 +130,7 @@ export default function Home() {
                 <Crosshair className="w-4 h-4 text-white" />
               </div>
               <span className="text-sm font-semibold tracking-wide text-white">
-                LOCATOR
+                Where You Are Today!
               </span>
             </div>
 

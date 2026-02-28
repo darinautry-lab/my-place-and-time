@@ -10,14 +10,15 @@ type LiveClockProps = {
 
 export default function LiveClock({ timezone }: LiveClockProps) {
   const [time, setTime] = useState(new Date());
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTime(new Date());
-    }, 1000);
-
+    setMounted(true);
+    const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  if (!mounted) return null;
 
   const resolvedTimezone =
     timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
