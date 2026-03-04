@@ -13,6 +13,8 @@ import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { fetchRestaurants } from "@/lib/layers/restaurants";
+import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
 
 type LocationMapProps = {
   lat: number | null;
@@ -130,31 +132,15 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [showRestaurants, setShowRestaurants] = useState(false);
 
-  /* =========================================================
-     OVERPASS FETCH FUNCTION
-     Called whenever map bounds change
-  ========================================================= */
-  const fetchRestaurants = async (bounds: L.LatLngBounds) => {
-    const south = bounds.getSouth();
-    const west = bounds.getWest();
-    const north = bounds.getNorth();
-    const east = bounds.getEast();
-
-    const query = `
-      [out:json];
-      node["amenity"="restaurant"]
-      (${south},${west},${north},${east});
-      out;
-    `;
-
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      body: query,
-    });
-
-    const data = await response.json();
-    setRestaurants(data.elements || []);
+  const handleRestaurantFetch = async (bounds: L.LatLngBounds) => {
+    const data = await fetchRestaurants(bounds);
+    setRestaurants(data);
   };
+
+  /* =========================================================
+     NOAA RADAR STATE
+  ========================================================= */
+  const [showRadar, setShowRadar] = useState(true);
 
   return (
     <motion.div
@@ -180,18 +166,37 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
         {/* MAP AREA */}
         <div className="relative h-[350px] md:h-[420px]">
-          {/* RESTAURANT TOGGLE */}
-          <div className="absolute top-4 right-4 z-[1000] bg-black/60 p-2 rounded-lg">
+          ` {/* LAYER CONTROLS */}
+          <div className="absolute top-4 right-4 z-[1000] bg-black/60 p-3 rounded-lg space-y-1">
             <label className="flex items-center gap-2 text-xs text-white">
               <input
                 type="checkbox"
                 checked={showRestaurants}
-                onChange={() => setShowRestaurants((prev) => !prev)}
+                onChange={() => {
+                  setShowRestaurants((prev) => {
+                    const next = !prev;
+
+                    if (!next) {
+                      setRestaurants([]);
+                    }
+
+                    return next;
+                  });
+                }}
               />
               Restaurants
             </label>
-          </div>
 
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
+                checked={showRadar}
+                onChange={() => setShowRadar((prev) => !prev)}
+              />
+              Radar
+            </label>
+          </div>
+          {/* LOADING OVERLAY */}
           {loading && (
             <div className="absolute inset-0 z-[1000] bg-[#0A0F1C]/80 backdrop-blur-sm flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -202,7 +207,7 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               </div>
             </div>
           )}
-
+          `
           <MapContainer
             center={center}
             zoom={14}
@@ -211,6 +216,14 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             attributionControl={false}
           >
             <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+
+            {/* NOAA RADAR LAYER */}
+            {showRadar && (
+              <TileLayer
+                url={noaaRadarLayer.tileUrl}
+                opacity={noaaRadarLayer.opacity}
+              />
+            )}
 
             {hasLocation && (
               <>
@@ -235,7 +248,7 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               <>
                 <RestaurantFetcher
                   enabled={showRestaurants}
-                  onFetch={fetchRestaurants}
+                  onFetch={handleRestaurantFetch}
                 />
 
                 {restaurants.map((r) => (
