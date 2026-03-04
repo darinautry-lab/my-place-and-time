@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Circle, Marker, useMap } from "react-leaflet";
+import { useEffect, useState } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  Circle,
+  Marker,
+  Popup,
+  useMap,
+} from "react-leaflet";
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
@@ -13,9 +20,23 @@ type LocationMapProps = {
   loading: boolean;
 };
 
-// Fix default marker icon paths
+type Restaurant = {
+  id: number;
+  lat: number;
+  lon: number;
+  tags?: {
+    name?: string;
+    cuisine?: string;
+  };
+};
+
+/* =========================================================
+   FIX DEFAULT LEAFLET MARKER ICON PATHS
+   (Leaflet does not auto-resolve CDN icons in Next.js)
+========================================================= */
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: () => string })
   ._getIconUrl;
+
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
@@ -25,7 +46,9 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-// Custom glowing blue marker
+/* =========================================================
+   CUSTOM USER LOCATION MARKER
+========================================================= */
 const customIcon = new L.DivIcon({
   html: `<div style="
     width: 20px;
@@ -42,25 +65,96 @@ const customIcon = new L.DivIcon({
 
 const ONE_MILE_METERS = 1609.34;
 
-// Smoothly recenter map when coords update
+/* =========================================================
+   MAP RECENTER HELPER
+   (Re-centers map when user location changes)
+========================================================= */
 function MapUpdater({ center }: { center: [number, number] }) {
   const map = useMap();
 
   useEffect(() => {
-    if (center) {
-      map.setView(center, 14, { animate: true, duration: 1.5 });
-    }
+    map.setView(center, 14, { animate: true, duration: 1.5 });
   }, [center, map]);
 
   return null;
 }
 
+/* =========================================================
+   RESTAURANT FETCHER COMPONENT
+   This listens for map movement and triggers fetch
+========================================================= */
+function RestaurantFetcher({
+  enabled,
+  onFetch,
+}: {
+  enabled: boolean;
+  onFetch: (bounds: L.LatLngBounds) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handleMoveEnd = () => {
+      const bounds = map.getBounds();
+      onFetch(bounds);
+    };
+
+    map.on("moveend", handleMoveEnd);
+
+    // Initial load
+    handleMoveEnd();
+
+    return () => {
+      map.off("moveend", handleMoveEnd);
+    };
+  }, [map, enabled, onFetch]);
+
+  return null;
+}
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
 export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
   const hasLocation = lat !== null && lng !== null;
 
   const center: [number, number] = hasLocation
     ? [lat!, lng!]
-    : [40.7128, -74.006]; // fallback (NYC)
+    : [40.7128, -74.006]; // fallback NYC
+
+  /* =========================================================
+     RESTAURANT STATE
+     This stores restaurant results from Overpass
+  ========================================================= */
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [showRestaurants, setShowRestaurants] = useState(false);
+
+  /* =========================================================
+     OVERPASS FETCH FUNCTION
+     Called whenever map bounds change
+  ========================================================= */
+  const fetchRestaurants = async (bounds: L.LatLngBounds) => {
+    const south = bounds.getSouth();
+    const west = bounds.getWest();
+    const north = bounds.getNorth();
+    const east = bounds.getEast();
+
+    const query = `
+      [out:json];
+      node["amenity"="restaurant"]
+      (${south},${west},${north},${east});
+      out;
+    `;
+
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: query,
+    });
+
+    const data = await response.json();
+    setRestaurants(data.elements || []);
+  };
 
   return (
     <motion.div
@@ -70,7 +164,7 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
       className="relative"
     >
       <div className="relative backdrop-blur-xl bg-white/[0.03] border border-white/[0.08] rounded-3xl overflow-hidden">
-        {/* Header */}
+        {/* HEADER */}
         <div className="flex items-center gap-2 px-8 pt-6 pb-4">
           <MapPin className="w-4 h-4 text-blue-400/70" />
           <span className="text-xs font-medium tracking-[0.2em] uppercase text-slate-400">
@@ -84,8 +178,20 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
           )}
         </div>
 
-        {/* Map container */}
+        {/* MAP AREA */}
         <div className="relative h-[350px] md:h-[420px]">
+          {/* RESTAURANT TOGGLE */}
+          <div className="absolute top-4 right-4 z-[1000] bg-black/60 p-2 rounded-lg">
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
+                checked={showRestaurants}
+                onChange={() => setShowRestaurants((prev) => !prev)}
+              />
+              Restaurants
+            </label>
+          </div>
+
           {loading && (
             <div className="absolute inset-0 z-[1000] bg-[#0A0F1C]/80 backdrop-blur-sm flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -110,7 +216,6 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               <>
                 <MapUpdater center={center} />
 
-                {/* 1 mile radius */}
                 <Circle
                   center={center}
                   radius={ONE_MILE_METERS}
@@ -122,6 +227,26 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
                 />
 
                 <Marker position={center} icon={customIcon} />
+              </>
+            )}
+
+            {/* RESTAURANT LAYER */}
+            {showRestaurants && (
+              <>
+                <RestaurantFetcher
+                  enabled={showRestaurants}
+                  onFetch={fetchRestaurants}
+                />
+
+                {restaurants.map((r) => (
+                  <Marker key={r.id} position={[r.lat, r.lon]}>
+                    <Popup>
+                      <strong>{r.tags?.name || "Unnamed Restaurant"}</strong>
+                      <br />
+                      {r.tags?.cuisine || "Cuisine not specified"}
+                    </Popup>
+                  </Marker>
+                ))}
               </>
             )}
           </MapContainer>
