@@ -9,5 +9,5 @@ export const noaaRadarLayer = {
   tileUrl:
     "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png",
 
-  opacity: 0.65,
+  opacity: 0.75,
 };

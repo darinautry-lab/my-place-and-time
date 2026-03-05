@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -16,6 +16,8 @@ import L from "leaflet";
 import { terrainLayer } from "@/lib/layers/terrain";
 import { satelliteLayer } from "@/lib/layers/satellite";
 import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
+import type { WeatherStation } from "@/lib/layers/weatherStations";
+import { fetchWeatherStations } from "@/lib/layers/weatherStations";
 import { fetchRestaurants } from "@/lib/layers/restaurants";
 
 type LocationMapProps = {
@@ -67,7 +69,7 @@ const customIcon = new L.DivIcon({
   iconAnchor: [10, 10],
 });
 
-const ONE_MILE_METERS = 1609.34;
+const SEARCH_RADIUS_METERS = 24140; // ~15 miles in meters
 
 /* =========================================================
    MAP RECENTER HELPER
@@ -75,10 +77,61 @@ const ONE_MILE_METERS = 1609.34;
 ========================================================= */
 function MapUpdater({ center }: { center: [number, number] }) {
   const map = useMap();
+  const initialized = useRef(false);
 
   useEffect(() => {
-    map.setView(center, 14, { animate: true, duration: 1.5 });
+    if (!initialized.current) {
+      map.flyTo(center, 11);
+      initialized.current = true;
+    }
   }, [center, map]);
+
+  return null;
+}
+
+/* =========================================================
+   FULLSCREEN CONTROL (native browser fullscreen)
+========================================================= */
+function FullscreenControl() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+
+    const control = new L.Control({ position: "topleft" });
+
+    control.onAdd = () => {
+      const btn = L.DomUtil.create("button", "leaflet-bar");
+
+      btn.innerHTML = "⛶";
+      btn.title = "Fullscreen map";
+
+      btn.style.width = "34px";
+      btn.style.height = "34px";
+      btn.style.fontSize = "18px";
+      btn.style.cursor = "pointer";
+      btn.style.background = "white";
+
+      L.DomEvent.on(btn, "click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+
+        if (!document.fullscreenElement) {
+          container.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      return btn;
+    };
+
+    control.addTo(map);
+
+    return () => {
+      control.remove();
+    };
+  }, [map]);
 
   return null;
 }
@@ -140,7 +193,18 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
   /* =========================================================
      NOAA RADAR STATE
   ========================================================= */
-  const [showRadar, setShowRadar] = useState(true);
+  const [showRadar, setShowRadar] = useState(false);
+
+  /* =========================================================
+     NOAA WEATHER STATIONS STATE
+  ========================================================= */
+  const [weatherStations, setWeatherStations] = useState<WeatherStation[]>([]);
+  const [showWeatherStations, setShowWeatherStations] = useState(false);
+
+  const handleWeatherFetch = async (bounds: L.LatLngBounds) => {
+    const data = await fetchWeatherStations(bounds);
+    setWeatherStations(data);
+  };
 
   /* =========================================================
      RESTAURANT STATE
@@ -222,6 +286,15 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             <label className="flex items-center gap-2 text-xs text-white">
               <input
                 type="checkbox"
+                checked={showWeatherStations}
+                onChange={() => setShowWeatherStations((prev) => !prev)}
+              />
+              Weather Stations
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
                 checked={showRestaurants}
                 onChange={() => {
                   setShowRestaurants((prev) => {
@@ -257,6 +330,8 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             zoomControl={false}
             attributionControl={false}
           >
+            <FullscreenControl />
+
             {/* BASEMAP */}
             {!showTerrain && !showSatellite && (
               <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
@@ -291,7 +366,7 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
                 <Circle
                   center={center}
-                  radius={ONE_MILE_METERS}
+                  radius={SEARCH_RADIUS_METERS}
                   pathOptions={{
                     color: "#3b82f6",
                     fillColor: "#3b82f6",
@@ -300,6 +375,26 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
                 />
 
                 <Marker position={center} icon={customIcon} />
+              </>
+            )}
+
+            {/* WEATHER STATIONS LAYER */}
+            {showWeatherStations && (
+              <>
+                <RestaurantFetcher
+                  enabled={showWeatherStations}
+                  onFetch={handleWeatherFetch}
+                />
+
+                {weatherStations.map((s) => (
+                  <Marker key={s.id} position={[s.lat, s.lon]}>
+                    <Popup>
+                      <strong>{s.name}</strong>
+                      <br />
+                      Station ID: {s.id}
+                    </Popup>
+                  </Marker>
+                ))}
               </>
             )}
 
