@@ -13,8 +13,10 @@ import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { fetchRestaurants } from "@/lib/layers/restaurants";
+import { terrainLayer } from "@/lib/layers/terrain";
+import { satelliteLayer } from "@/lib/layers/satellite";
 import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
+import { fetchRestaurants } from "@/lib/layers/restaurants";
 
 type LocationMapProps = {
   lat: number | null;
@@ -126,6 +128,21 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
     : [40.7128, -74.006]; // fallback NYC
 
   /* =========================================================
+     TERRAIN STATE
+  ========================================================= */
+  const [showTerrain, setShowTerrain] = useState(false);
+
+  /* =========================================================
+     SATELLITE STATE
+  ========================================================= */
+  const [showSatellite, setShowSatellite] = useState(false);
+
+  /* =========================================================
+     NOAA RADAR STATE
+  ========================================================= */
+  const [showRadar, setShowRadar] = useState(true);
+
+  /* =========================================================
      RESTAURANT STATE
      This stores restaurant results from Overpass
   ========================================================= */
@@ -136,11 +153,6 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
     const data = await fetchRestaurants(bounds);
     setRestaurants(data);
   };
-
-  /* =========================================================
-     NOAA RADAR STATE
-  ========================================================= */
-  const [showRadar, setShowRadar] = useState(true);
 
   return (
     <motion.div
@@ -166,8 +178,47 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
         {/* MAP AREA */}
         <div className="relative h-[350px] md:h-[420px]">
-          ` {/* LAYER CONTROLS */}
+          {/* LAYER CONTROLS */}
           <div className="absolute top-4 right-4 z-[1000] bg-black/60 p-3 rounded-lg space-y-1">
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
+                checked={showTerrain}
+                onChange={() => {
+                  setShowTerrain((prev) => {
+                    const next = !prev;
+                    if (next) setShowSatellite(false);
+                    return next;
+                  });
+                }}
+              />
+              Terrain
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
+                checked={showSatellite}
+                onChange={() => {
+                  setShowSatellite((prev) => {
+                    const next = !prev;
+                    if (next) setShowTerrain(false);
+                    return next;
+                  });
+                }}
+              />
+              Satellite
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
+                checked={showRadar}
+                onChange={() => setShowRadar((prev) => !prev)}
+              />
+              Radar
+            </label>
+
             <label className="flex items-center gap-2 text-xs text-white">
               <input
                 type="checkbox"
@@ -186,15 +237,6 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               />
               Restaurants
             </label>
-
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showRadar}
-                onChange={() => setShowRadar((prev) => !prev)}
-              />
-              Radar
-            </label>
           </div>
           {/* LOADING OVERLAY */}
           {loading && (
@@ -207,7 +249,7 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               </div>
             </div>
           )}
-          `
+
           <MapContainer
             center={center}
             zoom={14}
@@ -215,7 +257,25 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             zoomControl={false}
             attributionControl={false}
           >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+            {/* BASEMAP */}
+            {!showTerrain && !showSatellite && (
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+            )}
+
+            {/* TERRAIN */}
+            {showTerrain && (
+              <TileLayer
+                url={terrainLayer.url}
+                attribution={terrainLayer.attribution}
+              />
+            )}
+
+            {showSatellite && (
+              <TileLayer
+                url={satelliteLayer.url}
+                attribution={satelliteLayer.attribution}
+              />
+            )}
 
             {/* NOAA RADAR LAYER */}
             {showRadar && (
