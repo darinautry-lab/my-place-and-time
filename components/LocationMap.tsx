@@ -1,14 +1,9 @@
 "use client";
 
+import "@/lib/leafletDefaults";
+import { userLocationIcon } from "@/lib/mapIcons";
 import { useEffect, useState, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Circle,
-  Marker,
-  Popup,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Circle, Marker, useMap } from "react-leaflet";
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
@@ -16,9 +11,10 @@ import L from "leaflet";
 import { terrainLayer } from "@/lib/layers/terrain";
 import { satelliteLayer } from "@/lib/layers/satellite";
 import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
-import type { WeatherStation } from "@/lib/layers/weatherStations";
-import { fetchWeatherStations } from "@/lib/layers/weatherStations";
-import { fetchRestaurants } from "@/lib/layers/restaurants";
+import LayerRenderer from "@/components/LayerRenderer";
+import { restaurantLayer } from "@/lib/layers/restaurantLayer";
+import { weatherStationLayer } from "@/lib/layers/weatherStationLayer";
+import { riverGaugeLayer } from "@/lib/layers/riverGaugeLayer";
 
 type LocationMapProps = {
   lat: number | null;
@@ -26,54 +22,11 @@ type LocationMapProps = {
   loading: boolean;
 };
 
-type Restaurant = {
-  id: number;
-  lat: number;
-  lon: number;
-  tags?: {
-    name?: string;
-    cuisine?: string;
-  };
-};
-
-/* =========================================================
-   FIX DEFAULT LEAFLET MARKER ICON PATHS
-   (Leaflet does not auto-resolve CDN icons in Next.js)
-========================================================= */
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: () => string })
-  ._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
-
-/* =========================================================
-   CUSTOM USER LOCATION MARKER
-========================================================= */
-const customIcon = new L.DivIcon({
-  html: `<div style="
-    width: 20px;
-    height: 20px;
-    background: #3B82F6;
-    border: 3px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 20px rgba(59,130,246,0.5), 0 2px 8px rgba(0,0,0,0.3);
-  "></div>`,
-  className: "",
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-});
-
 const SEARCH_RADIUS_METERS = 24140; // ~15 miles in meters
 
 /* =========================================================
-   MAP RECENTER HELPER
-   (Re-centers map when user location changes)
+   MAP CENTER
+   (Initial one-time fly-to when user location becomes available)
 ========================================================= */
 function MapUpdater({ center }: { center: [number, number] }) {
   const map = useMap();
@@ -137,48 +90,13 @@ function FullscreenControl() {
 }
 
 /* =========================================================
-   RESTAURANT FETCHER COMPONENT
-   This listens for map movement and triggers fetch
-========================================================= */
-function RestaurantFetcher({
-  enabled,
-  onFetch,
-}: {
-  enabled: boolean;
-  onFetch: (bounds: L.LatLngBounds) => void;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const handleMoveEnd = () => {
-      const bounds = map.getBounds();
-      onFetch(bounds);
-    };
-
-    map.on("moveend", handleMoveEnd);
-
-    // Initial load
-    handleMoveEnd();
-
-    return () => {
-      map.off("moveend", handleMoveEnd);
-    };
-  }, [map, enabled, onFetch]);
-
-  return null;
-}
-
-/* =========================================================
    MAIN COMPONENT
 ========================================================= */
 export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
   const hasLocation = lat !== null && lng !== null;
 
-  const center: [number, number] = hasLocation
-    ? [lat!, lng!]
-    : [40.7128, -74.006]; // fallback NYC
+  const center: [number, number] =
+    lat !== null && lng !== null ? [lat, lng] : [40.7128, -74.006]; // fallback NYC
 
   /* =========================================================
      TERRAIN STATE
@@ -197,26 +115,18 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
   /* =========================================================
      NOAA WEATHER STATIONS STATE
-  ========================================================= */
-  const [weatherStations, setWeatherStations] = useState<WeatherStation[]>([]);
+  =========================================================*/
   const [showWeatherStations, setShowWeatherStations] = useState(false);
 
-  const handleWeatherFetch = async (bounds: L.LatLngBounds) => {
-    const data = await fetchWeatherStations(bounds);
-    setWeatherStations(data);
-  };
+  /* =========================================================
+     RIVER GAUGES STATE
+  ========================================================= */
+  const [showRiverGauges, setShowRiverGauges] = useState(false);
 
   /* =========================================================
      RESTAURANT STATE
-     This stores restaurant results from Overpass
   ========================================================= */
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [showRestaurants, setShowRestaurants] = useState(false);
-
-  const handleRestaurantFetch = async (bounds: L.LatLngBounds) => {
-    const data = await fetchRestaurants(bounds);
-    setRestaurants(data);
-  };
 
   return (
     <motion.div
@@ -235,7 +145,7 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
           {hasLocation && (
             <span className="ml-auto text-xs text-slate-500 font-mono">
-              {lat!.toFixed(4)}°, {lng!.toFixed(4)}°
+              {center[0].toFixed(4)}°, {center[1].toFixed(4)}°
             </span>
           )}
         </div>
@@ -295,18 +205,17 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             <label className="flex items-center gap-2 text-xs text-white">
               <input
                 type="checkbox"
+                checked={showRiverGauges}
+                onChange={() => setShowRiverGauges((prev) => !prev)}
+              />
+              River Gauges
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-white">
+              <input
+                type="checkbox"
                 checked={showRestaurants}
-                onChange={() => {
-                  setShowRestaurants((prev) => {
-                    const next = !prev;
-
-                    if (!next) {
-                      setRestaurants([]);
-                    }
-
-                    return next;
-                  });
-                }}
+                onChange={() => setShowRestaurants((prev) => !prev)}
               />
               Restaurants
             </label>
@@ -328,13 +237,16 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             zoom={14}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
-            attributionControl={false}
+            attributionControl={true}
           >
             <FullscreenControl />
 
             {/* BASEMAP */}
             {!showTerrain && !showSatellite && (
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              />
             )}
 
             {/* TERRAIN */}
@@ -374,49 +286,21 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
                   }}
                 />
 
-                <Marker position={center} icon={customIcon} />
+                <Marker position={center} icon={userLocationIcon} />
               </>
             )}
 
             {/* WEATHER STATIONS LAYER */}
-            {showWeatherStations && (
-              <>
-                <RestaurantFetcher
-                  enabled={showWeatherStations}
-                  onFetch={handleWeatherFetch}
-                />
+            <LayerRenderer
+              layer={weatherStationLayer}
+              enabled={showWeatherStations}
+            />
 
-                {weatherStations.map((s) => (
-                  <Marker key={s.id} position={[s.lat, s.lon]}>
-                    <Popup>
-                      <strong>{s.name}</strong>
-                      <br />
-                      Station ID: {s.id}
-                    </Popup>
-                  </Marker>
-                ))}
-              </>
-            )}
+            {/* RIVER GAUGES LAYER */}
+            <LayerRenderer layer={riverGaugeLayer} enabled={showRiverGauges} />
 
             {/* RESTAURANT LAYER */}
-            {showRestaurants && (
-              <>
-                <RestaurantFetcher
-                  enabled={showRestaurants}
-                  onFetch={handleRestaurantFetch}
-                />
-
-                {restaurants.map((r) => (
-                  <Marker key={r.id} position={[r.lat, r.lon]}>
-                    <Popup>
-                      <strong>{r.tags?.name || "Unnamed Restaurant"}</strong>
-                      <br />
-                      {r.tags?.cuisine || "Cuisine not specified"}
-                    </Popup>
-                  </Marker>
-                ))}
-              </>
-            )}
+            <LayerRenderer layer={restaurantLayer} enabled={showRestaurants} />
           </MapContainer>
         </div>
       </div>

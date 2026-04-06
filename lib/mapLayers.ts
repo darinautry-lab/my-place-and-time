@@ -1,28 +1,25 @@
-// Base type for data returned by map layers
-export type LayerData = unknown;
+import type L from "leaflet";
+import type { ReactNode } from "react";
 
-// Universal map layer definition
-export type MapLayer = {
+export type MapLayer<T = unknown> = {
   id: string;
   name: string;
-  enabled: boolean;
-  fetchData?: (lat: number, lng: number) => Promise<LayerData>;
-};
+  enabledByDefault?: boolean;
 
-export const layers: MapLayer[] = [
-  {
-    id: "restaurants",
-    name: "Restaurants",
-    enabled: true,
-  },
-  {
-    id: "weatherStations",
-    name: "Weather Stations",
-    enabled: true,
-  },
-  {
-    id: "noaaRadar",
-    name: "NOAA Radar",
-    enabled: true,
-  },
-];
+  // Fetch layer data for current map bounds
+  fetch?: (bounds: L.LatLngBounds) => Promise<T[]>;
+
+  // Convert layer item into marker position + key
+  renderMarker?: (item: T) => {
+    key: string | number;
+    position: [number, number];
+  };
+
+  // Render popup content for a marker
+  renderPopup?: (item: T) => ReactNode;
+
+  // Whether this is a tile layer instead of marker layer
+  tileUrl?: string;
+  opacity?: number;
+  attribution?: string;
+};
