@@ -129,6 +129,8 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
     }));
   };
 
+  const dataLayers = overlayLayers.filter((l) => l.group === "data");
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -155,6 +157,9 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
         <div className="relative h-[350px] md:h-[420px]">
           {/* LAYER CONTROLS */}
           <div className="absolute top-4 right-4 z-[1000] bg-black/60 p-3 rounded-lg space-y-1">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+              Map
+            </div>
             <label className="flex items-center gap-2 text-xs text-white">
               <input
                 type="checkbox"
@@ -194,20 +199,28 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               Radar
             </label>
 
-            {overlayLayers.map(({ id, label }) => (
-              <label
-                key={id}
-                className="flex items-center gap-2 text-xs text-white"
-              >
-                <input
-                  type="checkbox"
-                  checked={enabledOverlays[id]}
-                  onChange={() => toggleOverlay(id)}
-                />
-                {label}
-              </label>
-            ))}
+            {/* DATA LAYERS */}
+            <div className="pt-2 border-t border-white/10">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
+                Data Layers
+              </div>
+
+              {dataLayers.map(({ id, label }) => (
+                <label
+                  key={id}
+                  className="flex items-center gap-2 text-xs text-white"
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabledOverlays[id]}
+                    onChange={() => toggleOverlay(id)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
+
           {/* LOADING OVERLAY */}
           {loading && (
             <div className="absolute inset-0 z-[1000] bg-[#0A0F1C]/80 backdrop-blur-sm flex items-center justify-center">
