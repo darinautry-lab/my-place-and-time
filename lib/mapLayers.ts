@@ -23,3 +23,18 @@ export type MapLayer<T = unknown> = {
   opacity?: number;
   attribution?: string;
 };
+
+export type AnyMapLayer = {
+  id: string;
+  name: string;
+  enabledByDefault?: boolean;
+  fetch?: (bounds: L.LatLngBounds) => Promise<unknown[]>;
+  renderMarker?: (item: unknown) => {
+    key: string | number;
+    position: [number, number];
+  };
+  renderPopup?: (item: unknown) => ReactNode;
+  tileUrl?: string;
+  opacity?: number;
+  attribution?: string;
+};

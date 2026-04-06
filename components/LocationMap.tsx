@@ -2,19 +2,17 @@
 
 import "@/lib/leafletDefaults";
 import { userLocationIcon } from "@/lib/mapIcons";
+import { terrainLayer } from "@/lib/layers/terrain";
+import { satelliteLayer } from "@/lib/layers/satellite";
+import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
+import LayerRenderer from "@/components/LayerRenderer";
+import { overlayLayers, type OverlayLayerId } from "@/lib/layerRegistry";
 import { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Circle, Marker, useMap } from "react-leaflet";
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { terrainLayer } from "@/lib/layers/terrain";
-import { satelliteLayer } from "@/lib/layers/satellite";
-import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
-import LayerRenderer from "@/components/LayerRenderer";
-import { restaurantLayer } from "@/lib/layers/restaurantLayer";
-import { weatherStationLayer } from "@/lib/layers/weatherStationLayer";
-import { riverGaugeLayer } from "@/lib/layers/riverGaugeLayer";
 
 type LocationMapProps = {
   lat: number | null;
@@ -114,19 +112,22 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
   const [showRadar, setShowRadar] = useState(false);
 
   /* =========================================================
-     NOAA WEATHER STATIONS STATE
+     NOAA STATIONS, RIVER, RESTAURANT STATE
   =========================================================*/
-  const [showWeatherStations, setShowWeatherStations] = useState(false);
+  const [enabledOverlays, setEnabledOverlays] = useState<
+    Record<OverlayLayerId, boolean>
+  >({
+    weatherStations: false,
+    riverGauges: false,
+    restaurants: false,
+  });
 
-  /* =========================================================
-     RIVER GAUGES STATE
-  ========================================================= */
-  const [showRiverGauges, setShowRiverGauges] = useState(false);
-
-  /* =========================================================
-     RESTAURANT STATE
-  ========================================================= */
-  const [showRestaurants, setShowRestaurants] = useState(false);
+  const toggleOverlay = (id: OverlayLayerId) => {
+    setEnabledOverlays((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   return (
     <motion.div
@@ -193,32 +194,19 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               Radar
             </label>
 
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showWeatherStations}
-                onChange={() => setShowWeatherStations((prev) => !prev)}
-              />
-              Weather Stations
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showRiverGauges}
-                onChange={() => setShowRiverGauges((prev) => !prev)}
-              />
-              River Gauges
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showRestaurants}
-                onChange={() => setShowRestaurants((prev) => !prev)}
-              />
-              Restaurants
-            </label>
+            {overlayLayers.map(({ id, label }) => (
+              <label
+                key={id}
+                className="flex items-center gap-2 text-xs text-white"
+              >
+                <input
+                  type="checkbox"
+                  checked={enabledOverlays[id]}
+                  onChange={() => toggleOverlay(id)}
+                />
+                {label}
+              </label>
+            ))}
           </div>
           {/* LOADING OVERLAY */}
           {loading && (
@@ -290,17 +278,14 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
               </>
             )}
 
-            {/* WEATHER STATIONS LAYER */}
-            <LayerRenderer
-              layer={weatherStationLayer}
-              enabled={showWeatherStations}
-            />
-
-            {/* RIVER GAUGES LAYER */}
-            <LayerRenderer layer={riverGaugeLayer} enabled={showRiverGauges} />
-
-            {/* RESTAURANT LAYER */}
-            <LayerRenderer layer={restaurantLayer} enabled={showRestaurants} />
+            {/* WEATHER, RIVER GAUGES, AND RESTAURANT LAYERS */}
+            {overlayLayers.map(({ id, layer }) => (
+              <LayerRenderer
+                key={id}
+                layer={layer}
+                enabled={enabledOverlays[id]}
+              />
+            ))}
           </MapContainer>
         </div>
       </div>

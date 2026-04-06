@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Marker, Popup, useMap } from "react-leaflet";
-import type { MapLayer } from "@/lib/mapLayers";
+import type { AnyMapLayer } from "@/lib/mapLayers";
 
-type Props<T> = {
-  layer: MapLayer<T>;
+type Props = {
+  layer: AnyMapLayer;
   enabled: boolean;
 };
 
-export default function LayerRenderer<T>({ layer, enabled }: Props<T>) {
+export default function LayerRenderer({ layer, enabled }: Props) {
   const map = useMap();
-  const [data, setData] = useState<T[]>([]);
+  const [data, setData] = useState<unknown[]>([]);
 
   useEffect(() => {
     if (!enabled || !layer.fetch) return;
@@ -45,11 +45,11 @@ export default function LayerRenderer<T>({ layer, enabled }: Props<T>) {
 
   return (
     <>
-      {data.map((item) => {
+      {data.map((item, index) => {
         const marker = layer.renderMarker!(item);
 
         return (
-          <Marker key={marker.key} position={marker.position}>
+          <Marker key={marker.key ?? index} position={marker.position}>
             <Popup>{layer.renderPopup!(item)}</Popup>
           </Marker>
         );
