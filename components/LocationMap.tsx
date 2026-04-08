@@ -7,6 +7,7 @@ import { satelliteLayer } from "@/lib/layers/satellite";
 import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
 import LayerRenderer from "@/components/LayerRenderer";
 import { overlayLayers, type OverlayLayerId } from "@/lib/layerRegistry";
+import LayerControlPanel from "@/components/LayerControlPanel";
 import { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Circle, Marker, useMap } from "react-leaflet";
 import { motion } from "framer-motion";
@@ -47,25 +48,39 @@ function FullscreenControl() {
   const map = useMap();
 
   useEffect(() => {
-    const container = map.getContainer();
-
-    const control = new L.Control({ position: "topleft" });
+    const control = new L.Control({ position: "topright" });
 
     control.onAdd = () => {
-      const btn = L.DomUtil.create("button", "leaflet-bar");
+      const btn = L.DomUtil.create(
+        "div",
+        "leaflet-bar custom-fullscreen-button",
+      );
 
-      btn.innerHTML = "⛶";
+      btn.innerHTML = `
+        <div style="
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 15px;
+        ">
+          ⛶
+        </div>
+      `;
+
       btn.title = "Fullscreen map";
-
-      btn.style.width = "34px";
-      btn.style.height = "34px";
-      btn.style.fontSize = "18px";
       btn.style.cursor = "pointer";
-      btn.style.background = "white";
 
       L.DomEvent.on(btn, "click", (e) => {
         L.DomEvent.stopPropagation(e);
         L.DomEvent.preventDefault(e);
+
+        const container = map
+          .getContainer()
+          .closest(".map-shell") as HTMLElement | null;
+
+        if (!container) return;
 
         if (!document.fullscreenElement) {
           container.requestFullscreen();
@@ -95,6 +110,11 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
   const center: [number, number] =
     lat !== null && lng !== null ? [lat, lng] : [40.7128, -74.006]; // fallback NYC
+
+  /* =========================================================
+     LAYER PANEL STATE
+  ========================================================= */
+  const [showLayerPanel, setShowLayerPanel] = useState(true);
 
   /* =========================================================
      TERRAIN STATE
@@ -154,72 +174,21 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
         </div>
 
         {/* MAP AREA */}
-        <div className="relative h-[350px] md:h-[420px]">
+        <div className="map-shell relative h-[410px] md:h-[500px]">
           {/* LAYER CONTROLS */}
-          <div className="absolute top-4 right-4 z-[1000] bg-black/60 p-3 rounded-lg space-y-1">
-            <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
-              Map
-            </div>
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showTerrain}
-                onChange={() => {
-                  setShowTerrain((prev) => {
-                    const next = !prev;
-                    if (next) setShowSatellite(false);
-                    return next;
-                  });
-                }}
-              />
-              Terrain
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showSatellite}
-                onChange={() => {
-                  setShowSatellite((prev) => {
-                    const next = !prev;
-                    if (next) setShowTerrain(false);
-                    return next;
-                  });
-                }}
-              />
-              Satellite
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-white">
-              <input
-                type="checkbox"
-                checked={showRadar}
-                onChange={() => setShowRadar((prev) => !prev)}
-              />
-              Radar
-            </label>
-
-            {/* DATA LAYERS */}
-            <div className="pt-2 border-t border-white/10">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">
-                Data Layers
-              </div>
-
-              {dataLayers.map(({ id, label }) => (
-                <label
-                  key={id}
-                  className="flex items-center gap-2 text-xs text-white"
-                >
-                  <input
-                    type="checkbox"
-                    checked={enabledOverlays[id]}
-                    onChange={() => toggleOverlay(id)}
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
+          <LayerControlPanel
+            showLayerPanel={showLayerPanel}
+            setShowLayerPanel={setShowLayerPanel}
+            showTerrain={showTerrain}
+            setShowTerrain={setShowTerrain}
+            showSatellite={showSatellite}
+            setShowSatellite={setShowSatellite}
+            showRadar={showRadar}
+            setShowRadar={setShowRadar}
+            enabledOverlays={enabledOverlays}
+            toggleOverlay={toggleOverlay}
+            dataLayers={dataLayers}
+          />
 
           {/* LOADING OVERLAY */}
           {loading && (
