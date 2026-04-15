@@ -8,7 +8,7 @@ import { noaaRadarLayer } from "@/lib/layers/noaaRadar";
 import LayerRenderer from "@/components/LayerRenderer";
 import { overlayLayers, type OverlayLayerId } from "@/lib/layerRegistry";
 import LayerControlPanel from "@/components/LayerControlPanel";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Circle, Marker, useMap } from "react-leaflet";
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
@@ -27,16 +27,66 @@ const SEARCH_RADIUS_METERS = 24140; // ~15 miles in meters
    MAP CENTER
    (Initial one-time fly-to when user location becomes available)
 ========================================================= */
-function MapUpdater({ center }: { center: [number, number] }) {
+function MapUpdater({
+  center,
+  followMode,
+  lockToUser,
+  followTargetId,
+}: {
+  center: [number, number];
+  followMode: boolean;
+  lockToUser: boolean;
+  followTargetId: string | null;
+}) {
   const map = useMap();
-  const initialized = useRef(false);
 
   useEffect(() => {
-    if (!initialized.current) {
-      map.flyTo(center, 11);
-      initialized.current = true;
+    // Resolve which position to follow
+    const targetPosition = followTargetId === "user" ? center : center; // future: swap for real entities
+
+    if (lockToUser || followMode) {
+      map.flyTo(targetPosition, map.getZoom(), {
+        animate: true,
+        duration: 0.75,
+      });
     }
-  }, [center, map]);
+  }, [center, followMode, lockToUser, followTargetId, map]);
+
+  return null;
+}
+
+/* =========================================================
+   FOLLOW MODE HANDLER
+   (Disables follow mode when user manually interacts with the map)
+========================================================= */
+function FollowModeHandler({
+  followMode,
+  lockToUser,
+  setFollowMode,
+}: {
+  followMode: boolean;
+  lockToUser: boolean;
+  setFollowMode: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const handleDragStart = () => {
+      // If locked, ignore user movement entirely
+      if (lockToUser) return;
+
+      // If following, disable follow on manual drag
+      if (followMode) {
+        setFollowMode(false);
+      }
+    };
+
+    map.on("dragstart", handleDragStart);
+
+    return () => {
+      map.off("dragstart", handleDragStart);
+    };
+  }, [map, followMode, lockToUser, setFollowMode]);
 
   return null;
 }
@@ -110,6 +160,18 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
   const center: [number, number] =
     lat !== null && lng !== null ? [lat, lng] : [40.7128, -74.006]; // fallback NYC
+
+  //const userEntity = {
+  //  id: "user",
+  //  position: center,
+  //};
+
+  const [followMode, setFollowMode] = useState(true); // User Location Update State (follow mode on by default)
+
+  const [lockToUser, setLockToUser] = useState(false); // If true, user movement is ignored and follow mode cannot be disabled (used when user clicks "recenter" button in layer panel)
+
+  //const [followTargetId, _setFollowTargetId] = useState<string | null>("user"); // ID of the entity to follow (currently only "user", but can be extended to other entities in the future)
+  const [followTargetId] = useState<string | null>("user");
 
   /* =========================================================
      LAYER PANEL STATE
@@ -188,6 +250,10 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
             enabledOverlays={enabledOverlays}
             toggleOverlay={toggleOverlay}
             dataLayers={dataLayers}
+            followMode={followMode}
+            setFollowMode={setFollowMode}
+            lockToUser={lockToUser}
+            setLockToUser={setLockToUser}
           />
 
           {/* LOADING OVERLAY */}
@@ -244,7 +310,18 @@ export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
 
             {hasLocation && (
               <>
-                <MapUpdater center={center} />
+                <MapUpdater
+                  center={center}
+                  followMode={followMode}
+                  lockToUser={lockToUser}
+                  followTargetId={followTargetId}
+                />
+
+                <FollowModeHandler
+                  followMode={followMode}
+                  lockToUser={lockToUser}
+                  setFollowMode={setFollowMode}
+                />
 
                 <Circle
                   center={center}

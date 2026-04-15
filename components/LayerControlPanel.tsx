@@ -19,6 +19,10 @@ type Props = {
   enabledOverlays: Record<OverlayLayerId, boolean>;
   toggleOverlay: (id: OverlayLayerId) => void;
   dataLayers: OverlayLayerOption[];
+  followMode: boolean;
+  setFollowMode: React.Dispatch<React.SetStateAction<boolean>>;
+  lockToUser: boolean;
+  setLockToUser: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 export default function LayerControlPanel({
@@ -33,6 +37,10 @@ export default function LayerControlPanel({
   enabledOverlays,
   toggleOverlay,
   dataLayers,
+  followMode,
+  setFollowMode,
+  lockToUser,
+  setLockToUser,
 }: Props) {
   return (
     <div className="custom-layer-panel absolute top-0 left-0 z-[1000] w-44 rounded-xl border border-white/10 bg-black/65 backdrop-blur-md shadow-xl overflow-hidden">
@@ -115,6 +123,33 @@ export default function LayerControlPanel({
                   {label}
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* MAP CONTROLS */}
+          <div className="pt-2 border-t border-white/10">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+              Map Controls
+            </div>
+
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 text-xs text-white/95 leading-tight">
+                <input
+                  type="checkbox"
+                  checked={followMode}
+                  onChange={() => setFollowMode((prev) => !prev)}
+                />
+                Follow Mode
+              </label>
+
+              <label className="flex items-center gap-2 text-xs text-white/95 leading-tight">
+                <input
+                  type="checkbox"
+                  checked={lockToUser}
+                  onChange={() => setLockToUser((prev) => !prev)}
+                />
+                Lock to User
+              </label>
             </div>
           </div>
         </div>
