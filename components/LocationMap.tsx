@@ -44,15 +44,15 @@ function MapUpdater({
     // Resolve which position to follow
     const targetPosition = followTargetId === "user" ? center : center; // future: swap for real entities
 
-    console.log("🚀 MapUpdater fired:", {
-      center,
-      followMode,
-      lockToUser,
-      followTargetId,
-    });
+    //console.log("🚀 MapUpdater fired:", {
+    //  center,
+    //  followMode,
+    //  lockToUser,
+    //  followTargetId,
+    //});
 
     if (lockToUser || followMode) {
-      console.log("🧭 Flying to:", targetPosition);
+      //console.log("🧭 Flying to:", targetPosition);
 
       map.flyTo(targetPosition, map.getZoom(), {
         animate: true,
@@ -167,12 +167,12 @@ function FullscreenControl() {
 export default function LocationMap({ lat, lng, loading }: LocationMapProps) {
   const hasLocation = lat !== null && lng !== null;
 
-  console.log("🗺️ Map received:", lat, lng);
+  //console.log("🗺️ Map received:", lat, lng);
 
   const center: [number, number] =
     lat !== null && lng !== null ? [lat, lng] : [40.7128, -74.006]; // fallback NYC
 
-  console.log("📍 Center computed:", center);
+  //console.log("📍 Center computed:", center);
 
   //const userEntity = {
   //  id: "user",

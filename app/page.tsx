@@ -48,14 +48,39 @@ function getDistanceMeters(
   return R * c;
 }
 
-async function fetchAddress(lat: number, lng: number) {
+async function fetchAddress(
+  lat: number,
+  lng: number,
+  setLocationData: (data: LocationData) => void,
+  setTimezone: (tz: string) => void,
+) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
     );
     const data = await res.json();
 
-    console.log("📍 Address:", data.display_name);
+    const address = data.address || {};
+
+    const locationData: LocationData = {
+      city:
+        address.city ||
+        address.town ||
+        address.village ||
+        address.hamlet ||
+        "Unknown",
+      region: address.state || "Unknown",
+      country: address.country || "Unknown",
+      lat,
+      lng,
+    };
+
+    setLocationData(locationData);
+
+    // timezone fallback (Nominatim doesn't give it reliably)
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+    //console.log("📍 Address set:", locationData);
   } catch (err) {
     console.error("Reverse geocode failed", err);
   }
@@ -103,7 +128,7 @@ export default function Home() {
         const latitude = success.coords.latitude;
         const longitude = success.coords.longitude;
 
-        console.log("📡 GPS update:", latitude, longitude);
+        //console.log("📡 GPS update:", latitude, longitude);
 
         const prev = lastPositionRef.current;
 
@@ -121,14 +146,14 @@ export default function Home() {
             longitude,
           );
 
-          console.log("📏 Distance moved:", distance.toFixed(2), "meters");
+          //console.log("📏 Distance moved:", distance.toFixed(2), "meters");
 
           const MIN_DISTANCE = 25;
 
           if (distance >= MIN_DISTANCE) {
             shouldUpdate = true;
           } else {
-            console.log("⏸ Ignored small movement");
+            //console.log("⏸ Ignored small movement");
           }
         }
 
@@ -148,11 +173,11 @@ export default function Home() {
         if (now - lastGeocodeTimeRef.current > GEOCODE_INTERVAL) {
           lastGeocodeTimeRef.current = now;
 
-          console.log("🌍 Reverse geocode triggered");
+          //console.log("🌍 Reverse geocode triggered");
 
-          fetchAddress(latitude, longitude);
+          fetchAddress(latitude, longitude, setLocationData, setTimezone);
         } else {
-          console.log("⏳ Skipping geocode (throttled)");
+          //console.log("⏳ Skipping geocode (throttled)");
         }
       },
 
