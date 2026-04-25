@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Crosshair, AlertCircle } from "lucide-react";
@@ -24,12 +24,51 @@ type LocationData = {
   lng: number;
 };
 
+function getDistanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+) {
+  const R = 6371000; // Earth radius in meters
+  const toRad = (x: number) => (x * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+async function fetchAddress(lat: number, lng: number) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+    );
+    const data = await res.json();
+
+    console.log("📍 Address:", data.display_name);
+  } catch (err) {
+    console.error("Reverse geocode failed", err);
+  }
+}
+
 export default function Home() {
   const [location, setLocation] = useState<Coordinates | null>(null);
   const [locationData, setLocationData] = useState<LocationData | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastGeocodeTimeRef = useRef<number>(0);
 
   const fetchLocationFromIP = async () => {
     const res = await fetch("https://ipapi.co/json/");
@@ -49,7 +88,8 @@ export default function Home() {
     setLoading(false);
   };
 
-  const requestGeolocation = useCallback(() => {
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setPermissionDenied(false);
 
@@ -58,47 +98,84 @@ export default function Home() {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
+    const watchId = navigator.geolocation.watchPosition(
+      async (success) => {
+        const latitude = success.coords.latitude;
+        const longitude = success.coords.longitude;
 
-        setLocation({ lat: latitude, lng: longitude });
+        console.log("📡 GPS update:", latitude, longitude);
 
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=12`,
-        );
+        const prev = lastPositionRef.current;
 
-        const data = await res.json();
-        const addr = data.address || {};
+        let shouldUpdate = false;
 
-        setLocationData({
-          city:
-            addr.city || addr.town || addr.village || addr.hamlet || "Unknown",
-          region: addr.state || addr.county || "",
-          country: addr.country || "",
-          lat: latitude,
-          lng: longitude,
-        });
+        if (!prev) {
+          // 🥇 FIRST RUN
+          shouldUpdate = true;
+        } else {
+          // 🥈 DISTANCE CHECK
+          const distance = getDistanceMeters(
+            prev.lat,
+            prev.lng,
+            latitude,
+            longitude,
+          );
 
-        setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-        setLoading(false);
-      },
-      (err) => {
-        if (err.code === 1) {
-          setPermissionDenied(true);
+          console.log("📏 Distance moved:", distance.toFixed(2), "meters");
+
+          const MIN_DISTANCE = 25;
+
+          if (distance >= MIN_DISTANCE) {
+            shouldUpdate = true;
+          } else {
+            console.log("⏸ Ignored small movement");
+          }
         }
 
-        fetchLocationFromIP();
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-    );
-  }, []);
+        if (!shouldUpdate) return;
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      requestGeolocation();
-    });
-  }, [requestGeolocation]);
+        // ✅ Update stored position
+        lastPositionRef.current = { lat: latitude, lng: longitude };
+
+        // ✅ Update state
+        setLocation({ lat: latitude, lng: longitude });
+        setLoading(false);
+
+        // 🥉 THROTTLE REVERSE GEOCODE
+        const now = Date.now();
+        const GEOCODE_INTERVAL = 10000;
+
+        if (now - lastGeocodeTimeRef.current > GEOCODE_INTERVAL) {
+          lastGeocodeTimeRef.current = now;
+
+          console.log("🌍 Reverse geocode triggered");
+
+          fetchAddress(latitude, longitude);
+        } else {
+          console.log("⏳ Skipping geocode (throttled)");
+        }
+      },
+
+      (error) => {
+        console.error("📡 GPS error:", error);
+
+        if (error.code === 1) {
+          setPermissionDenied(true);
+          fetchLocationFromIP();
+        }
+      },
+
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 10000,
+      },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0A0F1C] text-white selection:bg-blue-500/30">

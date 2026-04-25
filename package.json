@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "framer-motion": "^12.34.3",
     "leaflet": "^1.9.4",
     "leaflet.fullscreen": "^5.3.0",
